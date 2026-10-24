@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isBrowsePath, isGuestOnlyPath, isPublicPath, requiresVerifiedPhone, safeNextPath } from "./paths";
+import { afterOnboardingPath, isBrowsePath, isGuestOnlyPath, isPublicPath, onboardingPath, safeNextPath } from "./paths";
 
 test("safeNextPath keeps same-origin paths", () => {
   assert.equal(safeNextPath("/messages/c_kai"), "/messages/c_kai");
@@ -38,9 +38,19 @@ test("signed-in users are bounced from guest-only pages but can reach reset and 
   assert.ok(!isGuestOnlyPath("/auth/confirm"));
 });
 
-test("everything signed-in stays locked until the phone is verified, except verify and reset", () => {
-  for (const p of ["/feed", "/discover", "/profile/marcus.hale", "/stories/s_sam", "/onboarding", "/settings", "/messages/c_kai", "/design"]) {
-    assert.ok(requiresVerifiedPhone(p), p);
-  }
-  for (const p of ["/verify-phone", "/reset-password", "/login", "/", "/auth/confirm"]) assert.ok(!requiresVerifiedPhone(p), p);
+test("after a verified code, everyone goes to onboarding, carrying only a safe destination", () => {
+  assert.equal(onboardingPath(""), "/onboarding");
+  assert.equal(onboardingPath(undefined), "/onboarding");
+  assert.equal(onboardingPath("/profile/marcus.hale"), "/onboarding?next=%2Fprofile%2Fmarcus.hale");
+  assert.equal(onboardingPath("//evil.test"), "/onboarding");
+  assert.equal(onboardingPath("https://evil.test/x"), "/onboarding");
+});
+
+test("finished onboarding goes to next, Discover by default, and never loops back", () => {
+  assert.equal(afterOnboardingPath(""), "/discover");
+  assert.equal(afterOnboardingPath("/messages/c_kai"), "/messages/c_kai");
+  assert.equal(afterOnboardingPath("/onboarding"), "/discover");
+  assert.equal(afterOnboardingPath("/onboarding?next=/x"), "/discover");
+  assert.equal(afterOnboardingPath("//evil.test"), "/discover");
+  assert.equal(afterOnboardingPath("", "/feed"), "/feed");
 });

@@ -7,7 +7,7 @@ Built in milestones. Do only the current milestone prompt and don't implement ah
 
 ## Stack
 - Next.js 16 App Router with `cacheComponents` + `partialPrefetching` enabled, React 19, strict TypeScript, Tailwind CSS 4 (tokens in `src/app/globals.css` `@theme`), Lucide icons, Radix (`radix-ui`) for complex interactive primitives (shadcn/ui-style ports in `components/ui/`, styled with Vernant tokens — not the shadcn token set).
-- Supabase (Auth, Postgres, Storage, Realtime) via `@supabase/ssr`. Auth is live (`src/proxy.ts`, `src/lib/auth/`); in-app data is still demo. Use Zod (installed) for all server-side input validation.
+- Supabase (Auth, Postgres, Storage, Realtime) via `@supabase/ssr`. Auth is live: one-time email codes for sign-up and log-in (`lib/auth/otp.ts`), plus password log-in by email or username (`src/proxy.ts`, `src/lib/auth/`). SMS/WhatsApp codes exist but stay hidden and refused unless `AUTH_SMS_ENABLED` / `AUTH_WHATSAPP_ENABLED` is `true`; never enable one before it's configured and tested. Onboarding (`src/lib/onboarding/`) writes to Postgres; other in-app data is still demo. Use Zod (installed) for all server-side input validation. `sharp` processes uploads server-side.
 - Package manager: **npm**. Path alias `@/*` → `src/*`.
 - Next 16 differs from older versions. Check `node_modules/next/dist/docs/` before relying on memory. `params` is a Promise. Read URL data (`params`, `searchParams`) behind Suspense: route `loading.tsx` files provide it.
 
@@ -21,7 +21,7 @@ npm run build        # production build — must pass before finishing
 ```bash
 npm test             # tsc → node:test on src/**/*.test.ts (pure modules only, relative imports, no @/ alias)
 ```
-Vitest was the plan but couldn't be installed offline; migrate these tests to it when convenient. Use pgTAP (`supabase test db`) for RLS.
+Vitest was the plan but couldn't be installed offline; migrate these tests to it when convenient. RLS tests are pgTAP in `supabase/tests/database/` (`npx supabase test db`; matrix in `docs/PERMISSIONS.md`).
 
 ## Layout
 - `src/app/(auth)`, `onboarding`, `(app)/*` (app shell: feed, discover, profiles are guest-browsable; `(app)/(member)/*` needs an account), `stories/[id]` (guest-browsable). Pages stay thin and render a view component.
@@ -31,8 +31,9 @@ Vitest was the plan but couldn't be installed offline; migrate these tests to it
 - `src/lib/types.ts`: domain types that mirror the DB schema.
 - `src/lib/demo/`: **DEMO ONLY** (fictional data, in-memory store, simulated latency). Keep it labeled as demo. Replace it screen by screen with real queries and delete the demo pieces once a screen is wired.
 - `src/lib/supabase/`: browser and server clients + proxy session refresh (publishable key only).
-- `src/lib/auth/`: server actions, Zod schemas, route rules (`paths.ts`, fail closed), `session.ts` (`getCurrentUser`/`requireUser`). Protected trees wrap children in `<Suspense><RequireUser>`.
-- `supabase/migrations/`: schema + RLS + storage policies. `0001` is a **draft, never applied**.
+- `src/lib/auth/`: server actions, Zod schemas, route rules (`paths.ts`, fail closed), `session.ts` (`getCurrentUser`/`requireUser`/`isMember`). Protected trees wrap children in `<Suspense><RequireUser>`; `requireUser()` also requires finished onboarding unless told otherwise.
+- `src/lib/onboarding/`: onboarding server actions, schemas, step logic (pure, tested), and the draft loader.
+- `supabase/migrations/`: schema + RLS + storage policies. `0001`–`0003` are **drafts, never applied**; add new changes as new numbered migrations. `supabase/seed.sql` is fictional and local-only.
 - `docs/ARCHITECTURE.md`: the security and data-access plan. Keep it current.
 
 ## Working rules
@@ -45,7 +46,7 @@ Vitest was the plan but couldn't be installed offline; migrate these tests to it
 - Update `README.md`, `docs/ARCHITECTURE.md`, and `.env.example` whenever behavior, setup, or env vars change.
 
 ## Security (non-negotiable)
-- **Secrets:** no real secrets in committed files. Only `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` may reach the browser. `SUPABASE_SERVICE_ROLE_KEY` is server-only: import it from `server-only` modules and never prefix it with `NEXT_PUBLIC_`.
+- **Secrets:** no real secrets in committed files. Only `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` may reach the browser. The secret key (`SUPABASE_SECRET_KEY`, or legacy `SUPABASE_SERVICE_ROLE_KEY`) is server-only: read it only in `server-only` modules (`lib/supabase/admin.ts`), keep it in `.env.local`, never in `.env.example`, and never prefix it with `NEXT_PUBLIC_`.
 - **Authorization:** enforce it on the server **and** in RLS. UI checks are UX, not security. Every table has RLS enabled, and no table is readable by `anon`.
 - **Validation:** validate all untrusted input server-side with Zod: server actions, route handlers, RPC args. Enforce limits in DB constraints too.
 - **Trust-sensitive writes:** matches, conversation creation, verification, moderation actions, and account deletion go through server code or `SECURITY DEFINER` functions with `set search_path = ''`. Clients never write these directly.

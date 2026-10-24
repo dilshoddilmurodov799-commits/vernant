@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { HOME_PATH, LOGIN_PATH, VERIFY_PHONE_PATH, isGuestOnlyPath, isPublicPath, requiresVerifiedPhone } from "@/lib/auth/paths";
+import { HOME_PATH, LOGIN_PATH, isGuestOnlyPath, isPublicPath } from "@/lib/auth/paths";
 import { getSupabaseEnv } from "./env";
 
 /**
@@ -33,15 +33,10 @@ export async function updateSession(request: NextRequest) {
   // Keep this the first call after creating the client: it validates the JWT and refreshes it if needed.
   const { data } = await supabase.auth.getClaims();
   const signedIn = Boolean(data?.claims);
-  // The `phone` claim is only set once an SMS code has confirmed the number (see lib/auth/session.ts).
-  const phoneVerified = Boolean(data?.claims.phone);
 
   if (!signedIn && !isPublicPath(pathname)) return withSession(redirectToLogin(request, pathname + search), response);
   if (signedIn && isGuestOnlyPath(pathname)) {
     return withSession(NextResponse.redirect(new URL(HOME_PATH, request.url)), response);
-  }
-  if (signedIn && !phoneVerified && requiresVerifiedPhone(pathname)) {
-    return withSession(NextResponse.redirect(new URL(VERIFY_PHONE_PATH, request.url)), response);
   }
   return response;
 }

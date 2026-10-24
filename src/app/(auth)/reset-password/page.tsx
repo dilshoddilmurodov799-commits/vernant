@@ -12,7 +12,7 @@ export default function ResetPasswordPage() {
       <h1 className="font-display text-4xl tracking-tight">Choose a new password</h1>
       <p className="mt-2 mb-8 text-sm text-muted">You&apos;ll stay signed in on this device after saving.</p>
       <Suspense>
-        <RequireUser allowUnverifiedPhone>
+        <RequireUser allowUnverified>
           <ResetPasswordForm />
         </RequireUser>
       </Suspense>

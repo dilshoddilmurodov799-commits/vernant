@@ -21,6 +21,32 @@ export type Identity = (typeof IDENTITIES)[number];
 export const INTENTS = ["Dating", "Relationship", "Friends", "Community", "Chat"] as const;
 export type Intent = (typeof INTENTS)[number];
 
+export const PRONOUNS = ["he/him", "he/they", "they/them", "she/her", "she/they", "Prefer not to say"] as const;
+
+export const INTERESTS = [
+  "Art",
+  "Baking",
+  "BBQ",
+  "Board games",
+  "Camping",
+  "Coffee",
+  "Cooking",
+  "Cycling",
+  "Dogs",
+  "Film",
+  "Gaming",
+  "Gym",
+  "Hiking",
+  "Jazz",
+  "Live music",
+  "Photography",
+  "Reading",
+  "Road trips",
+  "Travel",
+  "Vinyl",
+  "Woodworking",
+] as const;
+
 export type Visibility = "everyone" | "members" | "matches";
 
 export interface User {

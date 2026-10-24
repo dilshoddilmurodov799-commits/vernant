@@ -267,3 +267,13 @@ export function splitInternational(value: string) {
   }
   return null;
 }
+
+/** "+447946095800" → "+44 ••••••••00": enough to recognise your own number, not to read someone else's. */
+export function maskPhone(value: string) {
+  const digits = value.replace(/\D/g, "");
+  const split = splitInternational(value);
+  const dial = split ? digits.slice(0, digits.length - split.number.length) : "";
+  const rest = split ? split.number : digits;
+  const masked = "•".repeat(Math.max(rest.length - 2, 0)) + rest.slice(-2);
+  return dial ? `+${dial} ${masked}` : masked;
+}

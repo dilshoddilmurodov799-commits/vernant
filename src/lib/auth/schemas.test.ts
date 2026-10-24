@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { splitInternational } from "./countries";
+import { maskPhone, splitInternational } from "./countries";
+import { describeAuthError } from "./errors";
 import {
   confirmParamsSchema,
   fieldErrors,
@@ -9,49 +10,98 @@ import {
   phoneOnlySchema,
   resetPasswordSchema,
   signInSchema,
-  signUpSchema,
   toInternational,
+  emailCodeStartSchema,
+  emailCodeVerifySchema,
+  phoneCodeStartSchema,
+  phoneCodeVerifySchema,
 } from "./schemas";
 
-const validSignUp = {
-  username: " Sam.Bear_1 ",
-  email: "  sam@example.com ",
-  phoneCountry: "US",
-  phone: "(312) 555-0142",
-  password: "correct horse battery",
-  terms: "on",
-};
+const validStart = { phoneCountry: "US", phone: "(312) 555-0142", consent: "on" };
 
-test("sign-up accepts valid input, trims email, lowercases username and joins the phone", () => {
-  const r = signUpSchema.safeParse(validSignUp);
+test("email code step 1 trims and lowercases the address", () => {
+  const r = emailCodeStartSchema.safeParse({ email: "  Sam.Bear@Example.COM " });
   assert.ok(r.success);
-  assert.equal(r.data.email, "sam@example.com");
-  assert.equal(r.data.username, "sam.bear_1");
-  assert.equal(r.data.phone, "+13125550142");
+  assert.equal(r.data.email, "sam.bear@example.com");
+  for (const bad of ["", "sam", "sam@", "@example.com", `${"a".repeat(250)}@x.co`]) {
+    const bad1 = emailCodeStartSchema.safeParse({ email: bad });
+    assert.ok(!bad1.success, bad);
+    assert.ok(fieldErrors(bad1.error).email, bad);
+  }
+  assert.ok(!emailCodeStartSchema.safeParse({}).success);
 });
 
-test("sign-up rejects missing terms, bad usernames and phones, and weak passwords", () => {
-  const cases: Array<[Partial<typeof validSignUp>, string]> = [
-    [{ terms: "" }, "terms"],
-    [{ username: "" }, "username"],
-    [{ username: "ab" }, "username"],
-    [{ username: "a".repeat(31) }, "username"],
-    [{ username: "sam bear" }, "username"],
-    [{ username: "sam@bear" }, "username"],
-    [{ password: "short" }, "password"],
-    [{ password: " ".repeat(12) }, "password"],
-    [{ password: "x".repeat(73) }, "password"],
-    [{ email: "nope" }, "email"],
+test("email code step 2 needs the address and a numeric code", () => {
+  const ok = emailCodeVerifySchema.safeParse({ email: "Sam@Example.com", code: " 123 456 ", next: "/discover" });
+  assert.ok(ok.success);
+  assert.deepEqual(ok.data, { email: "sam@example.com", code: "123456", next: "/discover" });
+  for (const [email, code] of [
+    ["sam@example.com", ""],
+    ["sam@example.com", "12a456"],
+    ["sam@example.com", "123"],
+    ["", "123456"],
+    ["not-an-email", "123456"],
+  ]) {
+    assert.ok(!emailCodeVerifySchema.safeParse({ email, code }).success, `${email} / ${code}`);
+  }
+});
+
+test("phone code step 1 joins the country code and requires consent", () => {
+  const r = phoneCodeStartSchema.safeParse(validStart);
+  assert.ok(r.success);
+  assert.equal(r.data.phone, "+13125550142");
+
+  const cases: Array<[Partial<typeof validStart>, string]> = [
+    [{ consent: "" }, "consent"],
+    [{ consent: "yes" }, "consent"],
     [{ phone: "" }, "phone"],
     [{ phone: "555" }, "phone"],
     [{ phoneCountry: "ZZ" }, "phone"],
     [{ phoneCountry: "" }, "phone"],
   ];
   for (const [patch, field] of cases) {
-    const r = signUpSchema.safeParse({ ...validSignUp, ...patch });
-    assert.ok(!r.success, JSON.stringify(patch));
-    assert.ok(fieldErrors(r.error)[field], `${field} for ${JSON.stringify(patch)}`);
+    const bad = phoneCodeStartSchema.safeParse({ ...validStart, ...patch });
+    assert.ok(!bad.success, JSON.stringify(patch));
+    assert.ok(fieldErrors(bad.error)[field], `${field} for ${JSON.stringify(patch)}`);
   }
+});
+
+test("phone code step 2 needs the E.164 number from step 1 and a numeric code", () => {
+  const ok = phoneCodeVerifySchema.safeParse({ phone: "+447946095800", code: "123 456", next: "/discover" });
+  assert.ok(ok.success);
+  assert.equal(ok.data.code, "123456");
+  for (const [phone, code] of [
+    ["07946095800", "123456"],
+    ["+44 7946 095800", "123456"],
+    ["", "123456"],
+    ["+447946095800", ""],
+    ["+447946095800", "12a456"],
+    ["+447946095800", "123"],
+  ]) {
+    assert.ok(!phoneCodeVerifySchema.safeParse({ phone, code }).success, `${phone} / ${code}`);
+  }
+});
+
+test("code failures get channel-specific wording", () => {
+  assert.match(describeAuthError({ code: "otp_expired" }, "email"), /wrong or has expired/);
+  assert.match(describeAuthError({ code: "over_email_send_rate_limit" }, "email"), /Too many attempts/);
+  assert.match(describeAuthError({ code: "email_address_not_authorized" }, "email"), /can't email that address/);
+  assert.match(describeAuthError({ code: "email_provider_disabled" }, "email"), /Email codes aren't available/);
+  assert.match(describeAuthError({ code: "unexpected_failure", status: 500 }, "email"), /couldn't send the email/);
+  assert.match(describeAuthError({ code: "unexpected_failure", status: 500 }), /Something went wrong/);
+  assert.match(describeAuthError({ code: "sms_send_failed" }, "whatsapp"), /couldn't send a WhatsApp message/);
+  assert.match(describeAuthError({ code: "sms_send_failed" }), /couldn't text/);
+  assert.match(describeAuthError({ code: "phone_provider_disabled" }, "whatsapp"), /WhatsApp codes aren't available/);
+  assert.match(describeAuthError({ code: "over_sms_send_rate_limit" }, "whatsapp"), /Wait a minute/);
+  assert.match(describeAuthError({ code: "otp_expired" }, "whatsapp"), /wrong or has expired/);
+  assert.match(describeAuthError({ code: "something_new" }, "whatsapp"), /Something went wrong/);
+});
+
+test("masked numbers keep the country code and last two digits only", () => {
+  assert.equal(maskPhone("+447946095800"), "+44 ••••••••00");
+  assert.equal(maskPhone("+13125550142"), "+1 ••••••••42");
+  assert.equal(maskPhone("+998901234567"), "+998 •••••••67");
+  assert.ok(!maskPhone("+13125550142").includes("555"));
 });
 
 test("sign-in accepts an email or a username", () => {
@@ -123,9 +173,10 @@ test("international numbers split back into country and number", () => {
   assert.equal(splitInternational(""), null);
 });
 
-test("SMS codes are 6-10 digits", () => {
+test("one-time codes are 4-10 digits (Supabase 6-10, Twilio Verify 4-10)", () => {
   const ok = phoneCodeSchema.safeParse({ code: " 123 456 " });
   assert.ok(ok.success);
   assert.equal(ok.data.code, "123456");
-  for (const bad of ["", "12345", "12345a", "12345678901"]) assert.ok(!phoneCodeSchema.safeParse({ code: bad }).success, bad);
+  assert.ok(phoneCodeSchema.safeParse({ code: "1234" }).success);
+  for (const bad of ["", "123", "12345a", "12345678901"]) assert.ok(!phoneCodeSchema.safeParse({ code: bad }).success, bad);
 });

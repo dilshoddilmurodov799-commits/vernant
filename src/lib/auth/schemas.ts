@@ -14,8 +14,8 @@ const email = z.string().trim().min(1, "Enter your email address").max(254, "Ema
 /** Mirrors the `profiles.username` check constraint. */
 export const USERNAME_PATTERN = /^[a-z0-9._]{3,30}$/;
 
-const username = z
-  .string()
+export const username = z
+  .string("Choose a username")
   .trim()
   .toLowerCase()
   .regex(USERNAME_PATTERN, "Use 3–30 letters, numbers, dots or underscores");
@@ -47,21 +47,23 @@ function withCountryCode(input: unknown) {
   return { ...input, phone: toInternational(typeof phoneCountry === "string" ? phoneCountry : "", phone) };
 }
 
+const E164 = /^\+[1-9]\d{7,14}$/;
+
 /** E.164: "+", country code, subscriber number — 8 to 15 digits in total. */
 const phone = z
-  .string()
+  .string("Enter your mobile number")
   .trim()
   .min(1, "Enter your mobile number")
   .transform(normalizePhone)
-  .pipe(z.string().regex(/^\+[1-9]\d{7,14}$/, "Check the country code and number"));
+  .pipe(z.string().regex(E164, "Check the country code and number"));
 
-const newPassword = z
+export const newPassword = z
   .string()
   .min(PASSWORD_MIN, `Use at least ${PASSWORD_MIN} characters`)
   .max(PASSWORD_MAX, `Use at most ${PASSWORD_MAX} characters`)
   .refine((p) => p.trim().length > 0, "Password can't be only spaces");
 
-/** Email or username ("@" prefix allowed). Usernames are resolved to an email on the server. */
+/** Email or username ("@" prefix allowed). Usernames are resolved on the server. */
 const loginIdentifier = z
   .string()
   .trim()
@@ -76,28 +78,43 @@ export const signInSchema = z.object({
   next: z.string().optional(),
 });
 
-export const signUpSchema = z.preprocess(
-  withCountryCode,
-  z.object({
-    username,
-    email,
-    phone,
-    password: newPassword,
-    terms: z.literal("on", "You must agree to continue"),
-  }),
-);
-
 export const emailOnlySchema = z.object({ email });
 
 export const phoneOnlySchema = z.preprocess(withCountryCode, z.object({ phone }));
 
-/** SMS codes are 6 digits by default (Supabase allows 6–10). */
-export const phoneCodeSchema = z.object({
-  code: z
-    .string()
-    .trim()
-    .transform((c) => c.replace(/\s/g, ""))
-    .pipe(z.string().regex(/^\d{6,10}$/, "Enter the code from the text message")),
+/** One-time codes: 6 digits by default (Supabase allows 6–10, Twilio Verify 4–10). */
+const otpCode = z
+  .string()
+  .trim()
+  .transform((c) => c.replace(/\s/g, ""))
+  .pipe(z.string().regex(/^\d{4,10}$/, "Enter the code we sent you"));
+
+export const phoneCodeSchema = z.object({ code: otpCode });
+
+/** Code sign-up/log-in by email, step 1. Lowercased so limits and lookups see one address. */
+export const emailCodeStartSchema = z.object({ email: email.transform((v) => v.toLowerCase()) });
+
+/** Step 2: the address the code went to (echoed by step 1) and the code. */
+export const emailCodeVerifySchema = z.object({
+  email: email.transform((v) => v.toLowerCase()),
+  code: otpCode,
+  next: z.string().optional(),
+});
+
+/** Code sign-up/log-in by SMS or WhatsApp, step 1: the number, and consent to receive the code. */
+export const phoneCodeStartSchema = z.preprocess(
+  withCountryCode,
+  z.object({
+    phone,
+    consent: z.literal("on", "Agree to receive the code to continue"),
+  }),
+);
+
+/** Step 2: the E.164 number step 1 echoed back, and the code. */
+export const phoneCodeVerifySchema = z.object({
+  phone: z.string().regex(E164, "Enter your number again"),
+  code: otpCode,
+  next: z.string().optional(),
 });
 
 export const resetPasswordSchema = z

@@ -6,6 +6,9 @@
 export const LOGIN_PATH = "/login";
 export const HOME_PATH = "/feed";
 export const VERIFY_PHONE_PATH = "/verify-phone";
+export const ONBOARDING_PATH = "/onboarding";
+/** Where a newly finished account lands when there's no `next`. */
+export const AFTER_ONBOARDING_PATH = "/discover";
 
 const PUBLIC_PATHS = new Set(["/", "/login", "/register", "/forgot-password"]);
 const PUBLIC_PREFIXES = ["/auth/"];
@@ -14,8 +17,6 @@ const BROWSE_PATHS = new Set(["/feed", "/discover"]);
 const BROWSE_PREFIXES = ["/profile/", "/stories/"];
 /** Your own profile, which sits under a browse prefix. */
 const MEMBER_ONLY_PATHS = new Set(["/profile/me"]);
-/** Signed-in pages that work before the phone number is verified. */
-const PHONE_EXEMPT_PATHS = new Set([VERIFY_PHONE_PATH, "/reset-password"]);
 /** Pages that make no sense once signed in. */
 const GUEST_ONLY_PATHS = new Set(["/login", "/register", "/forgot-password"]);
 
@@ -37,11 +38,6 @@ export function isGuestOnlyPath(pathname: string) {
   return GUEST_ONLY_PATHS.has(pathname);
 }
 
-/** Pages a signed-in account can't use until its phone number is verified (browse pages included). */
-export function requiresVerifiedPhone(pathname: string) {
-  return !isAuthFlowPath(pathname) && !PHONE_EXEMPT_PATHS.has(pathname);
-}
-
 /**
  * Returns `value` only if it is a same-origin path ("/feed?x=1"); otherwise the
  * fallback. Blocks open redirects such as "//evil.test", "/\evil.test" or
@@ -57,4 +53,16 @@ export function safeNextPath(value: string | null | undefined, fallback = HOME_P
   } catch {
     return fallback;
   }
+}
+
+/** Onboarding, carrying a validated destination for afterwards. */
+export function onboardingPath(next?: string | null) {
+  const target = safeNextPath(next, "");
+  return target ? `${ONBOARDING_PATH}?next=${encodeURIComponent(target)}` : ONBOARDING_PATH;
+}
+
+/** Destination once onboarding is done: `next` if safe, never onboarding itself (that would loop). */
+export function afterOnboardingPath(next: string | null | undefined, fallback = AFTER_ONBOARDING_PATH) {
+  const target = safeNextPath(next, fallback);
+  return new URL(target, "http://localhost").pathname === ONBOARDING_PATH ? fallback : target;
 }

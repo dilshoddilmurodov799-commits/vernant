@@ -3,6 +3,10 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
+  experimental: {
+    // Profile photo uploads (8 MB max, checked again in the action) go through a server action.
+    serverActions: { bodySizeLimit: "9mb" },
+  },
   turbopack: {
     rules: {
       "*.css": {

@@ -3,125 +3,58 @@
 import Link from "next/link";
 import { useActionState, useState } from "react";
 import { AlertTriangle, CheckCircle2, Eye, EyeOff, MailCheck } from "lucide-react";
-import {
-  requestPasswordReset,
-  resendConfirmation,
-  signIn,
-  signUp,
-  updatePassword,
-  type AuthFormState,
-} from "@/lib/auth/actions";
+import { requestPasswordReset, resendConfirmation, signIn, updatePassword, type AuthFormState } from "@/lib/auth/actions";
 import { PASSWORD_MAX, PASSWORD_MIN } from "@/lib/auth/schemas";
 import { isSupabaseConfigured, SUPABASE_NOT_CONFIGURED } from "@/lib/supabase/env";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
-import { PhoneField } from "@/components/auth/phone-field";
 
 const IDLE: AuthFormState = { status: "idle" };
 
-/** `next` is the post-login destination; the server action re-checks it is a same-origin path. */
-export function AuthForm({ mode, next = "" }: { mode: "login" | "register"; next?: string }) {
-  const isRegister = mode === "register";
-  const [state, action, pending] = useActionState(isRegister ? signUp : signIn, IDLE);
+/** Email or username + password. `next` is re-checked on the server as a same-origin path. */
+export function AuthForm({ next = "" }: { next?: string }) {
+  const [state, action, pending] = useActionState(signIn, IDLE);
   const errors = state.fieldErrors ?? {};
   const values = state.values ?? {};
-
-  if (isRegister && state.status === "success") return <CheckEmail email={state.message ?? ""} />;
 
   return (
     <div className="space-y-4">
       <form action={action} noValidate className="space-y-4">
         <ConfigNotice />
         {state.status === "error" && state.message && <FormAlert>{state.message}</FormAlert>}
-        {!isRegister && <input type="hidden" name="next" value={next} />}
-  
-        {isRegister ? (
-          <>
-            <Field label="Username" error={errors.username} hint="3–30 letters, numbers, dots or underscores. You can log in with it.">
-              {(p) => (
-                <Input
-                  {...p}
-                  name="username"
-                  autoComplete="username"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  maxLength={30}
-                  defaultValue={values.username}
-                  required
-                />
-              )}
-            </Field>
-            <Field label="Email" error={errors.email}>
-              {(p) => <Input {...p} name="email" type="email" autoComplete="email" maxLength={254} defaultValue={values.email} required />}
-            </Field>
-            <PhoneField
-              key={values.phoneCountry}
-              error={errors.phone}
-              hint="We'll text you a code to verify it. Never shown to others."
-              defaultCountry={values.phoneCountry}
-              defaultNumber={values.phone}
+        <input type="hidden" name="next" value={next} />
+        <Field label="Email or username" error={errors.identifier}>
+          {(p) => (
+            <Input
+              {...p}
+              name="identifier"
+              autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
+              maxLength={254}
+              defaultValue={values.identifier}
+              required
             />
-          </>
-        ) : (
-          <Field label="Email or username" error={errors.identifier}>
-            {(p) => (
-              <Input
-                {...p}
-                name="identifier"
-                autoComplete="username"
-                autoCapitalize="none"
-                spellCheck={false}
-                maxLength={254}
-                defaultValue={values.identifier}
-                required
-              />
-            )}
-          </Field>
-        )}
-        <Field
-          label="Password"
-          error={errors.password}
-          hint={isRegister ? `At least ${PASSWORD_MIN} characters` : undefined}
-        >
-          {(p) => <PasswordInput {...p} name="password" autoComplete={isRegister ? "new-password" : "current-password"} />}
+          )}
         </Field>
-        {!isRegister && (
-          <p className="-mt-1 text-right text-sm">
-            <Link href="/forgot-password" className="rounded text-accent hover:text-accent-hover">
-              Forgot password?
-            </Link>
-          </p>
-        )}
-        {isRegister && (
-          <div>
-            <label className="flex items-start gap-3 text-sm text-muted">
-              <input
-                type="checkbox"
-                name="terms"
-                defaultChecked={values.terms === "on"}
-                className="mt-0.5 size-4 accent-accent"
-                aria-invalid={!!errors.terms}
-                aria-describedby={errors.terms ? "terms-error" : undefined}
-              />
-              <span>I agree to the Community Guidelines, Terms, and Privacy Policy.</span>
-            </label>
-            {errors.terms && (
-              <p id="terms-error" className="mt-1.5 text-xs text-danger">
-                {errors.terms}
-              </p>
-            )}
-          </div>
-        )}
-  
+        <Field label="Password" error={errors.password}>
+          {(p) => <PasswordInput {...p} name="password" autoComplete="current-password" />}
+        </Field>
+        <p className="-mt-1 text-right text-sm">
+          <Link href="/forgot-password" className="rounded text-accent hover:text-accent-hover">
+            Forgot password?
+          </Link>
+        </p>
+
         <Button type="submit" size="lg" className="w-full" disabled={pending}>
-          {pending ? "One moment…" : isRegister ? "Create account" : "Log in"}
+          {pending ? "One moment…" : "Log in"}
         </Button>
-  
+
         <p className="text-center text-sm text-muted">
-          {isRegister ? "Already a member? " : "New to Vernant? "}
-          <Link href={isRegister ? "/login" : "/register"} className="rounded text-accent hover:text-accent-hover">
-            {isRegister ? "Log in" : "Create an account"}
+          New to Vernant?{" "}
+          <Link href="/register" className="rounded text-accent hover:text-accent-hover">
+            Create an account
           </Link>
         </p>
       </form>
@@ -181,23 +114,6 @@ export function ResetPasswordForm() {
   );
 }
 
-function CheckEmail({ email }: { email: string }) {
-  return (
-    <div className="space-y-4">
-      <SuccessPanel icon={MailCheck} title="Confirm your email">
-        We sent a confirmation link to <strong className="text-fg">{email}</strong>. Open it, then verify your phone number to finish creating
-        your account. If this address already has an account, log in instead.
-      </SuccessPanel>
-      <ResendConfirmation email={email} />
-      <p className="text-center text-sm text-muted">
-        <Link href="/login" className="rounded text-accent hover:text-accent-hover">
-          Back to log in
-        </Link>
-      </p>
-    </div>
-  );
-}
-
 function ResendConfirmation({ email }: { email: string }) {
   const [state, action, pending] = useActionState(resendConfirmation, IDLE);
   if (state.status !== "idle") {
@@ -217,11 +133,11 @@ function ResendConfirmation({ email }: { email: string }) {
   );
 }
 
-function PasswordInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+export function PasswordInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   const [visible, setVisible] = useState(false);
   return (
     <div className="relative">
-      <Input {...props} type={visible ? "text" : "password"} maxLength={PASSWORD_MAX} required className="pr-11" />
+      <Input {...props} type={visible ? "text" : "password"} maxLength={PASSWORD_MAX} required={props.required ?? true} className="pr-11" />
       <button
         type="button"
         onClick={() => setVisible((v) => !v)}

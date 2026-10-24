@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { MemberGate, ViewerProvider } from "@/components/auth/member-gate";
+import { ResumeOnboarding } from "@/components/auth/require-user";
 import { isMember } from "@/lib/auth/session";
 import Loading from "./loading";
 
@@ -11,6 +12,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <ViewerProvider signedIn={isMember()}>
       <AppShell>
         <Suspense fallback={<Loading />}>
+          <ResumeOnboarding />
           <MemberGate>{children}</MemberGate>
         </Suspense>
       </AppShell>
