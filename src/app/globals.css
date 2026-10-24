@@ -1,26 +1,166 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * Vernant design tokens.
+ *
+ * Components only use semantic tokens (bg-surface, text-muted, border-line, bg-accent…).
+ * Raw values live in the two theme blocks below; `@theme inline` maps them to utilities.
+ * Contrast (WCAG 2.1): fg/muted/subtle and accent text all meet ≥ 4.5:1 on bg, surface
+ * and surface-2 in both themes; accent-fg on accent ≥ 5.7:1.
+ *
+ * Radii: controls rounded-xl (12px) · cards/media rounded-2xl (16px) · pills/avatars rounded-full.
+ * Elevation: borders do the work; shadow-elevated is reserved for floating layers (menus, dialogs, toasts).
+ */
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* Dark is the default (no-JS fallback); light overrides via [data-theme]. */
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #09090a;
+  --surface: #111113;
+  --surface-2: #17171a;
+  --surface-3: #1f1f23;
+  --surface-4: #29292e;
+  --line: rgb(255 255 255 / 0.07);
+  --line-strong: rgb(255 255 255 / 0.13);
+  --fg: #ededef;
+  --muted: #a3a3ab;
+  --subtle: #8a8a94;
+  --accent: #d4935c;
+  --accent-hover: #e0a370;
+  --accent-soft: rgb(212 147 92 / 0.14);
+  --accent-fg: #1b1209;
+  --accent-2: #f0c69a;
+  --online: #5fcf8e;
+  --danger: #ec6a5e;
+  --danger-soft: rgb(236 106 94 / 0.12);
+  --placeholder-l1: 26%;
+  --placeholder-l2: 12%;
+  --backdrop: rgb(0 0 0 / 0.7);
+  --shadow-elevated-value: 0 16px 48px -12px rgb(0 0 0 / 0.7), 0 2px 8px rgb(0 0 0 / 0.4);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f8f7f4;
+  --surface: #ffffff;
+  --surface-2: #f1efeb;
+  --surface-3: #e8e5e0;
+  --surface-4: #dedad3;
+  --line: rgb(24 20 16 / 0.09);
+  --line-strong: rgb(24 20 16 / 0.16);
+  --fg: #18181b;
+  --muted: #5b5b64;
+  --subtle: #6b6b75;
+  --accent: #9a5426;
+  --accent-hover: #874920;
+  --accent-soft: #f3e6da;
+  --accent-fg: #ffffff;
+  --accent-2: #d9a36f;
+  --online: #2fa865;
+  --danger: #c0392b;
+  --danger-soft: rgb(192 57 43 / 0.09);
+  --placeholder-l1: 84%;
+  --placeholder-l2: 74%;
+  --backdrop: rgb(24 20 16 / 0.4);
+  --shadow-elevated-value: 0 16px 40px -12px rgb(24 20 16 / 0.22), 0 2px 6px rgb(24 20 16 / 0.08);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-surface-4: var(--surface-4);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-2: var(--accent-2);
+  --color-online: var(--online);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --shadow-elevated: var(--shadow-elevated-value);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-instrument), ui-serif, Georgia, serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@theme {
+  --animate-fade-in: fade-in 0.35s ease-out both;
+  --animate-rise: rise 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  --animate-pop: pop 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+  --animate-shimmer: shimmer 1.6s linear infinite;
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pop {
+    0% { opacity: 0; transform: scale(0.4); }
+    40% { opacity: 1; transform: scale(1.1); }
+    100% { opacity: 0; transform: scale(1); }
+  }
+  @keyframes shimmer {
+    from { background-position: -200% 0; }
+    to { background-position: 200% 0; }
   }
 }
 
+html {
+  background: var(--bg);
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--fg);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+dialog::backdrop {
+  background: var(--backdrop);
+  backdrop-filter: blur(4px);
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
