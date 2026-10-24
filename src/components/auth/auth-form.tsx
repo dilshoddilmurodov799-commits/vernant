@@ -16,15 +16,9 @@ import { isSupabaseConfigured, SUPABASE_NOT_CONFIGURED } from "@/lib/supabase/en
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
+import { PhoneField } from "@/components/auth/phone-field";
 
 const IDLE: AuthFormState = { status: "idle" };
-
-/** Latest date of birth that is 18 today, for the date picker. Validation happens on the server. */
-function maxBirthDate() {
-  const d = new Date();
-  d.setFullYear(d.getFullYear() - 18);
-  return d.toISOString().slice(0, 10);
-}
 
 /** `next` is the post-login destination; the server action re-checks it is a same-origin path. */
 export function AuthForm({ mode, next = "" }: { mode: "login" | "register"; next?: string }) {
@@ -42,14 +36,49 @@ export function AuthForm({ mode, next = "" }: { mode: "login" | "register"; next
         {state.status === "error" && state.message && <FormAlert>{state.message}</FormAlert>}
         {!isRegister && <input type="hidden" name="next" value={next} />}
   
-        {isRegister && (
-          <Field label="Display name" error={errors.displayName}>
-            {(p) => <Input {...p} name="displayName" autoComplete="nickname" maxLength={40} defaultValue={values.displayName} required />}
+        {isRegister ? (
+          <>
+            <Field label="Username" error={errors.username} hint="3–30 letters, numbers, dots or underscores. You can log in with it.">
+              {(p) => (
+                <Input
+                  {...p}
+                  name="username"
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  maxLength={30}
+                  defaultValue={values.username}
+                  required
+                />
+              )}
+            </Field>
+            <Field label="Email" error={errors.email}>
+              {(p) => <Input {...p} name="email" type="email" autoComplete="email" maxLength={254} defaultValue={values.email} required />}
+            </Field>
+            <PhoneField
+              key={values.phoneCountry}
+              error={errors.phone}
+              hint="We'll text you a code to verify it. Never shown to others."
+              defaultCountry={values.phoneCountry}
+              defaultNumber={values.phone}
+            />
+          </>
+        ) : (
+          <Field label="Email or username" error={errors.identifier}>
+            {(p) => (
+              <Input
+                {...p}
+                name="identifier"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+                maxLength={254}
+                defaultValue={values.identifier}
+                required
+              />
+            )}
           </Field>
         )}
-        <Field label="Email" error={errors.email}>
-          {(p) => <Input {...p} name="email" type="email" autoComplete="email" maxLength={254} defaultValue={values.email} required />}
-        </Field>
         <Field
           label="Password"
           error={errors.password}
@@ -65,41 +94,24 @@ export function AuthForm({ mode, next = "" }: { mode: "login" | "register"; next
           </p>
         )}
         {isRegister && (
-          <>
-            <Field label="Date of birth" error={errors.birthDate} hint="Vernant is strictly 18+. Your birth date is never shown publicly.">
-              {(p) => (
-                  <Input
-                    {...p}
-                    // Set on the client: "today" must not be frozen into the prerendered HTML.
-                    ref={(el) => {
-                      if (el) el.max = maxBirthDate();
-                    }}
-                    name="birthDate"
-                    type="date"
-                    defaultValue={values.birthDate}
-                    required
-                  />
-                )}
-            </Field>
-            <div>
-              <label className="flex items-start gap-3 text-sm text-muted">
-                <input
-                  type="checkbox"
-                  name="terms"
-                  defaultChecked={values.terms === "on"}
-                  className="mt-0.5 size-4 accent-accent"
-                  aria-invalid={!!errors.terms}
-                  aria-describedby={errors.terms ? "terms-error" : undefined}
-                />
-                <span>I confirm I am 18 or older and agree to the Community Guidelines, Terms, and Privacy Policy.</span>
-              </label>
-              {errors.terms && (
-                <p id="terms-error" className="mt-1.5 text-xs text-danger">
-                  {errors.terms}
-                </p>
-              )}
-            </div>
-          </>
+          <div>
+            <label className="flex items-start gap-3 text-sm text-muted">
+              <input
+                type="checkbox"
+                name="terms"
+                defaultChecked={values.terms === "on"}
+                className="mt-0.5 size-4 accent-accent"
+                aria-invalid={!!errors.terms}
+                aria-describedby={errors.terms ? "terms-error" : undefined}
+              />
+              <span>I agree to the Community Guidelines, Terms, and Privacy Policy.</span>
+            </label>
+            {errors.terms && (
+              <p id="terms-error" className="mt-1.5 text-xs text-danger">
+                {errors.terms}
+              </p>
+            )}
+          </div>
         )}
   
         <Button type="submit" size="lg" className="w-full" disabled={pending}>
@@ -173,8 +185,8 @@ function CheckEmail({ email }: { email: string }) {
   return (
     <div className="space-y-4">
       <SuccessPanel icon={MailCheck} title="Confirm your email">
-        We sent a confirmation link to <strong className="text-fg">{email}</strong>. Open it to finish creating your account. If this address
-        already has an account, log in instead.
+        We sent a confirmation link to <strong className="text-fg">{email}</strong>. Open it, then verify your phone number to finish creating
+        your account. If this address already has an account, log in instead.
       </SuccessPanel>
       <ResendConfirmation email={email} />
       <p className="text-center text-sm text-muted">
@@ -223,7 +235,7 @@ function PasswordInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   );
 }
 
-function FormAlert({ children }: { children: React.ReactNode }) {
+export function FormAlert({ children }: { children: React.ReactNode }) {
   return (
     <div role="alert" className="flex gap-2.5 rounded-xl border border-danger/25 bg-danger-soft px-3.5 py-3 text-sm text-danger">
       <AlertTriangle className="mt-0.5 size-4 shrink-0" />

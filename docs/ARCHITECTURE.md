@@ -14,24 +14,52 @@ run on demo data.
   `next` redirect targets are restricted to same-origin paths.
 - All auth input is validated with Zod in server actions. Errors never reveal whether an email has
   an account (sign-up, resend, and reset all respond the same way).
-- Sign-up stores `display_name` and `birth_date` in `user_metadata` (visible only to the user and
-  the service role). Metadata is user-editable, so when the profile migration lands, the
-  `auth.users` insert trigger that copies `birth_date` into `profile_private` must rely on that
-  table's 18+ trigger, not on the metadata.
+- Phone verification: sign-up creates the email account, then adds the phone with
+  `updateUser({ phone })`, which texts a code. The account is locked (proxy redirect +
+  `requireUser()`) until `verifyOtp({ type: "phone_change" })` succeeds. The JWT `phone` claim is
+  only populated after verification in this flow, so it's used as the "verified" flag; **phone
+  sign-ups must stay disabled** in the dashboard or that assumption breaks. The code is checked
+  against the pending number read from the Auth server (`getUser().new_phone`), never from the form.
+  Phone numbers are private: shown only to their owner, never to other members, never logged.
+- Phone input is a country picker + national number; the server action joins them into E.164
+  (`toInternational()`: drops the trunk prefix such as a leading 0; a number typed with `+` wins).
+- Sign-up asks for a username only (no display name) and stores it in `user_metadata`. Metadata is client-writable via
+  the Auth API, so the `auth.users` insert trigger (`handle_new_user`) that creates the
+  `profiles` row relies on that table's constraints (format, unique username), not on the
+  metadata. The server action also pre-checks the username so a taken one gets a field error.
+- Log-in accepts an email or a username. A username is resolved to the account email on the
+  server through `login_email()`, a `SECURITY DEFINER` RPC executable only by the service role
+  (`src/lib/supabase/admin.ts`); the email is passed straight to `signInWithPassword` and never
+  returned to the browser (not even in the "confirm your email" hint). Unknown usernames get the
+  same error as a wrong password. Without the service-role key or the migration, username log-in
+  answers "use your email" and sign-up skips the pre-check.
+
+## Guest browsing
+- Signed-out visitors can browse `/feed`, `/discover`, `/profile/<username>` (not `/profile/me`)
+  and `/stories/<id>` (`isBrowsePath()` in `src/lib/auth/paths.ts`). Everything else fails closed.
+  Signed-in accounts still need a verified phone on these pages.
+- `isMember()` (signed in + verified phone) is passed un-awaited to `ViewerProvider`, so the shell
+  prerenders and the session streams in. `MemberGate` / `useMemberAction()` show guests a join
+  prompt instead of liking, following, commenting, reporting, blocking, or replying. That is UX only.
+- When real data lands, the "no table readable by `anon`" rule stays: guest pages will read through
+  server code that returns only content whose owner chose `visibility = 'everyone'` (and public
+  posts/stories), never private fields. Members-only and matches-only content stays behind RLS.
 
 ## Data access
 - Browser and server components use the **publishable key + user session** only. All authorization
   happens in Postgres **Row Level Security** (`supabase/migrations/0001_initial_schema.sql`).
-- `SUPABASE_SERVICE_ROLE_KEY` stays server-only and is used only for moderation and admin jobs.
+- `SUPABASE_SERVICE_ROLE_KEY` stays server-only and is used only for the username → email
+  log-in lookup, moderation, and admin jobs.
   It must never get a `NEXT_PUBLIC_` prefix or be imported from a client component.
 - Trust-sensitive mutations (creating conversations, match detection, verification, account
   deletion) run as `SECURITY DEFINER` RPCs or server actions. Clients don't write those
   tables directly.
 
 ## Age & identity
-- 18+ is enforced in four places: the sign-up date picker, Zod in the sign-up server action, a DB trigger on `profile_private.birth_date`,
-  and moderation (the "Appears under 18" report reason is prioritized).
-- Birth date lives in an owner-only table. Other members only ever see the derived age.
+- Members are expected to be adults, but sign-up has **no age gate** and doesn't ask for a birth
+  date (product decision). If a birth date is added later it must be 18+ (DB trigger on
+  `profile_private.birth_date`), and the "Appears under 18" report reason is prioritized in moderation.
+- Birth date (optional) lives in an owner-only table. Other members only ever see the derived age.
 - `profiles.verified` can only be changed by moderation (a trigger blocks client updates).
 
 ## Privacy & blocking

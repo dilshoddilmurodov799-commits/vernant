@@ -16,13 +16,3 @@ export function initials(name: string) {
     .map((p) => p[0]?.toUpperCase() ?? "")
     .join("");
 }
-
-/** Whole years between a YYYY-MM-DD birth date and now. */
-export function ageFromBirthDate(value: string, now = new Date()) {
-  const dob = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(dob.getTime())) return null;
-  let age = now.getFullYear() - dob.getFullYear();
-  const m = now.getMonth() - dob.getMonth();
-  if (m < 0 || (m === 0 && now.getDate() < dob.getDate())) age--;
-  return age;
-}

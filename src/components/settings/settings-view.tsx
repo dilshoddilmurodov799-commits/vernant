@@ -20,8 +20,8 @@ const VISIBILITY: Array<{ value: Visibility; label: string }> = [
   { value: "matches", label: "Matches only" },
 ];
 
-/** `accountEmail` is the signed-in user's own address (from the server session); never shown to others. */
-export function SettingsView({ accountEmail }: { accountEmail: string }) {
+/** `accountEmail`/`accountPhone` are the signed-in user's own details (from the server session); never shown to others. */
+export function SettingsView({ accountEmail, accountPhone }: { accountEmail: string; accountPhone: string }) {
   const { state, dispatch, getUser } = useDemo();
   const toast = useToast();
   const { settings, me } = state;
@@ -168,6 +168,11 @@ export function SettingsView({ accountEmail }: { accountEmail: string }) {
         <Section icon={ShieldCheck} title="Account & security">
           <Row label="Email" description={accountEmail || "—"}>
             <Button variant="secondary" size="sm" disabled title="Email change isn't available yet">
+              Change
+            </Button>
+          </Row>
+          <Row label="Mobile number" description={accountPhone ? `${accountPhone} · verified` : "—"}>
+            <Button variant="secondary" size="sm" disabled title="Changing your number isn't available yet">
               Change
             </Button>
           </Row>

@@ -14,6 +14,7 @@ import { Field, Select } from "@/components/ui/field";
 import { Badge, Chip, CountBadge, PageHeader, VerifiedBadge } from "@/components/ui/primitives";
 import { EmptyState, Skeleton } from "@/components/ui/states";
 import { useToast } from "@/components/ui/toast";
+import { useMemberAction } from "@/components/auth/member-gate";
 
 type Quick = "online" | "new" | "verified";
 const QUICK: Array<{ id: Quick; label: string; icon: typeof Zap }> = [
@@ -42,6 +43,7 @@ const toggle = <T,>(list: T[], item: T) => (list.includes(item) ? list.filter((x
 export function DiscoverView() {
   const { visibleUsers, state, dispatch } = useDemo();
   const toast = useToast();
+  const member = useMemberAction();
   const ready = useSimulatedLoad("discover");
   const [query, setQuery] = useState("");
   const [quick, setQuick] = useState(NO_QUICK);
@@ -77,17 +79,19 @@ export function DiscoverView() {
     setFilters(DEFAULT_FILTERS);
   };
 
-  const like = (u: User) => {
-    const first = u.name.split(" ")[0];
-    const mutual = state.likesYou.includes(u.id);
-    dispatch({ type: "likeProfile", userId: u.id });
-    toast(mutual ? `It's a match with ${first}!` : `You liked ${first}`);
-  };
-  const pass = (u: User) => {
-    dispatch({ type: "passProfile", userId: u.id });
-    setLastPassed(u);
-    if (previewId === u.id) setPreviewId(null);
-  };
+  const like = (u: User) =>
+    member(() => {
+      const first = u.name.split(" ")[0];
+      const mutual = state.likesYou.includes(u.id);
+      dispatch({ type: "likeProfile", userId: u.id });
+      toast(mutual ? `It's a match with ${first}!` : `You liked ${first}`);
+    });
+  const pass = (u: User) =>
+    member(() => {
+      dispatch({ type: "passProfile", userId: u.id });
+      setLastPassed(u);
+      if (previewId === u.id) setPreviewId(null);
+    });
   const undoPass = () => {
     if (!lastPassed) return;
     dispatch({ type: "undoPass", userId: lastPassed.id });

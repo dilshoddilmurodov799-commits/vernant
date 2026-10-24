@@ -3,10 +3,12 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { AuthError } from "@supabase/supabase-js";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured, SUPABASE_NOT_CONFIGURED } from "@/lib/supabase/env";
-import { HOME_PATH, LOGIN_PATH, safeNextPath } from "./paths";
-import { emailOnlySchema, fieldErrors, resetPasswordSchema, signInSchema, signUpSchema } from "./schemas";
+import { describeAuthError } from "./errors";
+import { HOME_PATH, LOGIN_PATH, VERIFY_PHONE_PATH, safeNextPath } from "./paths";
+import { emailOnlySchema, fieldErrors, phoneCodeSchema, phoneOnlySchema, resetPasswordSchema, signInSchema, signUpSchema } from "./schemas";
 
 /**
  * Auth server actions. Every input is re-validated with Zod here; Supabase Auth
@@ -36,24 +38,17 @@ async function siteUrl(path: string) {
   return new URL(path, origin).toString();
 }
 
-function describe(error: AuthError): string {
-  switch (error.code) {
-    case "invalid_credentials":
-      return "Incorrect email or password.";
-    case "weak_password":
-      return "Choose a stronger password — longer, and not a common one.";
-    case "same_password":
-      return "Choose a password you haven't used for this account.";
-    case "over_email_send_rate_limit":
-    case "over_request_rate_limit":
-      return "Too many attempts. Wait a few minutes and try again.";
-    case "signup_disabled":
-      return "New sign-ups are paused right now.";
-    case "email_address_invalid":
-      return "That email address can't receive mail. Try another.";
-    default:
-      return "Something went wrong. Please try again.";
-  }
+/**
+ * Account email for a username, via the service-role-only `login_email` RPC, so emails never
+ * reach the browser. `null` means no such username; "unavailable" means the lookup can't run
+ * (no service-role key, or the migration isn't applied).
+ */
+async function emailForUsername(username: string): Promise<string | null | "unavailable"> {
+  const admin = createAdminClient();
+  if (!admin) return "unavailable";
+  const { data, error } = await admin.rpc("login_email", { p_username: username });
+  if (error) return "unavailable";
+  return typeof data === "string" ? data : null;
 }
 
 /**
@@ -66,51 +61,78 @@ function reportable(error: AuthError) {
 
 export async function signIn(_prev: AuthFormState, formData: FormData): Promise<AuthFormState> {
   const raw = readForm(formData);
-  const values = { email: raw.email ?? "" };
+  const values = { identifier: raw.identifier ?? "" };
   const parsed = signInSchema.safeParse(raw);
   if (!parsed.success) return { status: "error", fieldErrors: fieldErrors(parsed.error), values };
   if (!isSupabaseConfigured()) return { ...NOT_CONFIGURED, values };
 
+  const { identifier, password } = parsed.data;
+  const byEmail = identifier.includes("@");
+  const email = byEmail ? identifier : await emailForUsername(identifier);
+  if (email === "unavailable") return { status: "error", message: "Username log-in isn't available right now. Use your email address.", values };
+  // Unknown usernames get the same answer as a wrong password.
+  if (!email) return { status: "error", message: describeAuthError({ code: "invalid_credentials" }), values };
+
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({ email: parsed.data.email, password: parsed.data.password });
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) {
     if (error.code === "email_not_confirmed") {
       return {
         status: "error",
         message: "Confirm your email address first — check your inbox for the link.",
-        unconfirmedEmail: parsed.data.email,
+        // Only echo an address the user typed; never reveal the one behind a username.
+        unconfirmedEmail: byEmail ? email : undefined,
         values,
       };
     }
-    return { status: "error", message: describe(error), values };
+    return { status: "error", message: describeAuthError(error), values };
   }
   redirect(safeNextPath(parsed.data.next, HOME_PATH));
 }
 
 export async function signUp(_prev: AuthFormState, formData: FormData): Promise<AuthFormState> {
   const raw = readForm(formData);
-  const values = { displayName: raw.displayName ?? "", email: raw.email ?? "", birthDate: raw.birthDate ?? "", terms: raw.terms ?? "" };
+  const values = {
+    username: raw.username ?? "",
+    email: raw.email ?? "",
+    phoneCountry: raw.phoneCountry ?? "",
+    phone: raw.phone ?? "",
+    terms: raw.terms ?? "",
+  };
   const parsed = signUpSchema.safeParse(raw);
   if (!parsed.success) return { status: "error", fieldErrors: fieldErrors(parsed.error), values };
   if (!isSupabaseConfigured()) return { ...NOT_CONFIGURED, values };
 
-  const { email, password, displayName, birthDate } = parsed.data;
+  const { email, phone, password, username } = parsed.data;
+  // Friendly early check (usernames are public). The unique constraint in the profile trigger is the real guard.
+  const existing = await emailForUsername(username);
+  if (existing && existing !== "unavailable") {
+    return { status: "error", fieldErrors: { username: "That username is taken" }, values };
+  }
+
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
       emailRedirectTo: await siteUrl("/auth/confirm?next=/onboarding"),
-      // Private to this user (and the service role). User-editable, so the profile
-      // trigger must re-validate birth_date when it copies it into profile_private.
-      data: { display_name: displayName, birth_date: birthDate },
+      // Copied into public.profiles by the auth.users insert trigger, which re-validates it:
+      // metadata is client-writable through the Auth API.
+      data: { username },
     },
   });
-  // "Already registered" is reported as success so the form can't be used to probe for accounts.
-  if (error && error.code !== "user_already_exists") return { status: "error", message: describe(error), values };
-  // Email confirmation disabled in the dashboard → Supabase signs the user in immediately.
-  if (data.session) redirect("/onboarding");
-  return { status: "success", message: email, values };
+  if (error) {
+    if (error.code === "user_already_exists" || error.code === "email_exists") {
+      return { status: "error", message: "We couldn't create an account with these details. If you already have one, log in.", values };
+    }
+    return { status: "error", message: describeAuthError(error), values };
+  }
+  // Dashboard "Confirm email" still on: no session yet. The phone is collected on /verify-phone after the email link.
+  if (!data.session) return { status: "success", message: email, values };
+
+  // Signed in but locked until the SMS code is entered (proxy + requireUser enforce this).
+  const { error: phoneError } = await supabase.auth.updateUser({ phone });
+  redirect(phoneError ? `${VERIFY_PHONE_PATH}?error=${encodeURIComponent(phoneError.code ?? "unknown")}` : VERIFY_PHONE_PATH);
 }
 
 export async function resendConfirmation(_prev: AuthFormState, formData: FormData): Promise<AuthFormState> {
@@ -124,7 +146,7 @@ export async function resendConfirmation(_prev: AuthFormState, formData: FormDat
     email: parsed.data.email,
     options: { emailRedirectTo: await siteUrl("/auth/confirm?next=/onboarding") },
   });
-  if (error && reportable(error)) return { status: "error", message: describe(error) };
+  if (error && reportable(error)) return { status: "error", message: describeAuthError(error) };
   return { status: "success", message: "If that address is waiting for confirmation, a new link is on its way." };
 }
 
@@ -139,7 +161,7 @@ export async function requestPasswordReset(_prev: AuthFormState, formData: FormD
   const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
     redirectTo: await siteUrl("/auth/confirm?next=/reset-password"),
   });
-  if (error && reportable(error)) return { status: "error", message: describe(error), values };
+  if (error && reportable(error)) return { status: "error", message: describeAuthError(error), values };
   return { status: "success", message: parsed.data.email, values };
 }
 
@@ -158,9 +180,55 @@ export async function updatePassword(_prev: AuthFormState, formData: FormData): 
     if (error.code === "reauthentication_needed") {
       return { status: "error", message: "For security, request a new reset link and try again." };
     }
-    return { status: "error", message: describe(error) };
+    return { status: "error", message: describeAuthError(error) };
   }
   redirect(HOME_PATH);
+}
+
+/** Texts a verification code to a new number for the signed-in account. */
+export async function sendPhoneCode(_prev: AuthFormState, formData: FormData): Promise<AuthFormState> {
+  const raw = readForm(formData);
+  const values = { phoneCountry: raw.phoneCountry ?? "", phone: raw.phone ?? "" };
+  const parsed = phoneOnlySchema.safeParse(raw);
+  if (!parsed.success) return { status: "error", fieldErrors: fieldErrors(parsed.error), values };
+  if (!isSupabaseConfigured()) return { ...NOT_CONFIGURED, values };
+
+  const supabase = await createClient();
+  const { data: claims } = await supabase.auth.getClaims();
+  if (!claims?.claims) redirect(`${LOGIN_PATH}?next=${VERIFY_PHONE_PATH}`);
+
+  const { error } = await supabase.auth.updateUser({ phone: parsed.data.phone });
+  if (error) return { status: "error", message: describeAuthError(error), values };
+  return { status: "success", message: parsed.data.phone };
+}
+
+/** Re-sends the code for the number already awaiting verification (read from the server, not the form). */
+export async function resendPhoneCode(): Promise<AuthFormState> {
+  if (!isSupabaseConfigured()) return NOT_CONFIGURED;
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getUser();
+  if (!data.user) redirect(`${LOGIN_PATH}?next=${VERIFY_PHONE_PATH}`);
+  if (!data.user.new_phone) return { status: "error", message: "Enter your number again to get a new code." };
+
+  const { error } = await supabase.auth.resend({ type: "phone_change", phone: data.user.new_phone });
+  if (error) return { status: "error", message: describeAuthError(error) };
+  return { status: "success", message: "New code sent." };
+}
+
+export async function verifyPhoneCode(_prev: AuthFormState, formData: FormData): Promise<AuthFormState> {
+  const parsed = phoneCodeSchema.safeParse(readForm(formData));
+  if (!parsed.success) return { status: "error", fieldErrors: fieldErrors(parsed.error) };
+  if (!isSupabaseConfigured()) return NOT_CONFIGURED;
+
+  const supabase = await createClient();
+  // getUser() asks the Auth server, so the pending number can't be swapped by the client.
+  const { data } = await supabase.auth.getUser();
+  if (!data.user) redirect(`${LOGIN_PATH}?next=${VERIFY_PHONE_PATH}`);
+  if (!data.user.new_phone) return { status: "error", message: "Enter your number again to get a new code." };
+
+  const { error } = await supabase.auth.verifyOtp({ phone: data.user.new_phone, token: parsed.data.code, type: "phone_change" });
+  if (error) return { status: "error", fieldErrors: { code: describeAuthError(error) } };
+  redirect("/onboarding");
 }
 
 export async function signOut() {

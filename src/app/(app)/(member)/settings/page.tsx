@@ -6,5 +6,5 @@ export const metadata: Metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const user = await requireUser();
-  return <SettingsView accountEmail={user.email ?? ""} />;
+  return <SettingsView accountEmail={user.email ?? ""} accountPhone={user.phone ? `+${user.phone.replace(/^\+/, "")}` : ""} />;
 }

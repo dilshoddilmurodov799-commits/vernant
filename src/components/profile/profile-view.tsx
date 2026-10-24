@@ -12,6 +12,7 @@ import { Photo } from "@/components/ui/photo";
 import { Badge, Segmented, VerifiedBadge } from "@/components/ui/primitives";
 import { EmptyState } from "@/components/ui/states";
 import { useToast } from "@/components/ui/toast";
+import { useMemberAction } from "@/components/auth/member-gate";
 import { SafetyDialogs, type SafetyAction } from "@/components/safety/safety-dialogs";
 
 type Tab = "posts" | "photos" | "private";
@@ -19,6 +20,7 @@ type Tab = "posts" | "photos" | "private";
 export function ProfileView({ username }: { username: string }) {
   const { state, dispatch, getUserByUsername } = useDemo();
   const toast = useToast();
+  const member = useMemberAction();
   const [tab, setTab] = useState<Tab>("posts");
   const [safety, setSafety] = useState<SafetyAction>(null);
   const [requested, setRequested] = useState(false);
@@ -141,11 +143,13 @@ export function ProfileView({ username }: { username: string }) {
                 <Button
                   variant={liked ? "secondary" : "primary"}
                   disabled={liked}
-                  onClick={() => {
-                    const mutual = state.likesYou.includes(user.id);
-                    dispatch({ type: "likeProfile", userId: user.id });
-                    toast(mutual ? `It's a match with ${first}!` : `You liked ${first}`);
-                  }}
+                  onClick={() =>
+                    member(() => {
+                      const mutual = state.likesYou.includes(user.id);
+                      dispatch({ type: "likeProfile", userId: user.id });
+                      toast(mutual ? `It's a match with ${first}!` : `You liked ${first}`);
+                    })
+                  }
                 >
                   <Heart className={cn(liked && "fill-accent text-accent")} />
                   {matched ? "Matched" : liked ? "Liked" : "Like"}
@@ -153,13 +157,13 @@ export function ProfileView({ username }: { username: string }) {
                 <ButtonLink href={`/messages/${conversationIdFor(user.id)}`} variant="secondary">
                   <MessageCircle /> Message
                 </ButtonLink>
-                <Button variant="outline" onClick={() => dispatch({ type: "toggleFollow", userId: user.id })}>
+                <Button variant="outline" onClick={() => member(() => dispatch({ type: "toggleFollow", userId: user.id }))}>
                   {following ? "Following" : "Follow"}
                 </Button>
                 <Menu
                   items={[
-                    { label: "Report", icon: Flag, onSelect: () => setSafety("report"), danger: true },
-                    { label: `Block ${first}`, icon: ShieldOff, onSelect: () => setSafety("block"), danger: true },
+                    { label: "Report", icon: Flag, onSelect: () => member(() => setSafety("report")), danger: true },
+                    { label: `Block ${first}`, icon: ShieldOff, onSelect: () => member(() => setSafety("block")), danger: true },
                   ]}
                 />
               </>
@@ -242,10 +246,12 @@ export function ProfileView({ username }: { username: string }) {
               isMe={isMe}
               first={first}
               requested={requested}
-              onRequest={() => {
-                setRequested(true);
-                toast(`Access requested from ${first} (demo)`);
-              }}
+              onRequest={() =>
+                member(() => {
+                  setRequested(true);
+                  toast(`Access requested from ${first} (demo)`);
+                })
+              }
             />
           )}
         </div>

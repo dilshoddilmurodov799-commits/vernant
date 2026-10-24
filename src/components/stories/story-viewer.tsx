@@ -11,6 +11,7 @@ import { Photo } from "@/components/ui/photo";
 import { EmptyState } from "@/components/ui/states";
 import { ButtonLink } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
+import { useMemberAction } from "@/components/auth/member-gate";
 
 const FRAME_MS = 5000;
 const TICK_MS = 50;
@@ -19,6 +20,7 @@ export function StoryViewer({ storyId }: { storyId: string }) {
   const { stories, getUser, dispatch } = useDemo();
   const router = useRouter();
   const toast = useToast();
+  const member = useMemberAction();
   const storyIndex = stories.findIndex((s) => s.id === storyId);
   const story = stories[storyIndex];
   const [frame, setFrame] = useState(0);
@@ -131,10 +133,12 @@ export function StoryViewer({ storyId }: { storyId: string }) {
           onSubmit={(e) => {
             e.preventDefault();
             if (!reply.trim()) return;
-            dispatch({ type: "sendMessage", userId: user.id, text: `Replied to your story: ${reply.trim()}` });
-            setReply("");
-            setPaused(false);
-            toast(`Reply sent to ${user.name.split(" ")[0]}`);
+            member(() => {
+              dispatch({ type: "sendMessage", userId: user.id, text: `Replied to your story: ${reply.trim()}` });
+              setReply("");
+              setPaused(false);
+              toast(`Reply sent to ${user.name.split(" ")[0]}`);
+            });
           }}
           className="absolute inset-x-0 bottom-0 flex items-center gap-2 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
         >

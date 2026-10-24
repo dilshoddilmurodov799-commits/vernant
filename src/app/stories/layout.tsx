@@ -1,10 +1,14 @@
 import { Suspense } from "react";
-import { RequireUser } from "@/components/auth/require-user";
+import { MemberGate, ViewerProvider } from "@/components/auth/member-gate";
+import { isMember } from "@/lib/auth/session";
 
-export default function ProtectedLayout({ children }: { children: React.ReactNode }) {
+/** Stories are open to guests; replying needs an account. */
+export default function StoriesLayout({ children }: { children: React.ReactNode }) {
   return (
-    <Suspense>
-      <RequireUser>{children}</RequireUser>
-    </Suspense>
+    <ViewerProvider signedIn={isMember()}>
+      <Suspense>
+        <MemberGate>{children}</MemberGate>
+      </Suspense>
+    </ViewerProvider>
   );
 }

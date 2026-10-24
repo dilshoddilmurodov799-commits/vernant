@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { RequireUser } from "@/components/auth/require-user";
 import { ProfileView } from "@/components/profile/profile-view";
 import { DEMO_ME, DEMO_USERS } from "@/lib/demo/data";
 
@@ -10,5 +11,8 @@ export function generateStaticParams() {
 
 export default async function ProfilePage({ params }: { params: Promise<{ username: string }> }) {
   const { username } = await params;
-  return <ProfileView key={username} username={decodeURIComponent(username)} />;
+  const name = decodeURIComponent(username);
+  const view = <ProfileView key={username} username={name} />;
+  // Other members' profiles are public; "me" is your own account.
+  return name === "me" ? <RequireUser>{view}</RequireUser> : view;
 }

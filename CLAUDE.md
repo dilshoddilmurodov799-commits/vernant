@@ -1,6 +1,6 @@
 # Vernant
 
-Adult-only (18+) dating and social web platform: visual social feed and stories, discovery and matching, real-time messaging.
+Adult dating and social web platform: visual social feed and stories, discovery and matching, real-time messaging.
 Built in milestones. Do only the current milestone prompt and don't implement ahead.
 
 > UI copy is branded Vernant (temporary wordmark in `components/ui/logo.tsx`). Demo image keys still use a legacy `hearth-*` prefix; they're internal IDs only.
@@ -24,7 +24,7 @@ npm test             # tsc → node:test on src/**/*.test.ts (pure modules only,
 Vitest was the plan but couldn't be installed offline; migrate these tests to it when convenient. Use pgTAP (`supabase test db`) for RLS.
 
 ## Layout
-- `src/app/(auth)`, `onboarding`, `(app)/*` (signed-in shell), `stories/[id]`. Pages stay thin and render a view component.
+- `src/app/(auth)`, `onboarding`, `(app)/*` (app shell: feed, discover, profiles are guest-browsable; `(app)/(member)/*` needs an account), `stories/[id]` (guest-browsable). Pages stay thin and render a view component.
 - `src/components/ui/`: the design system (Button, Avatar, Photo, Field, Dialog, DropdownMenu/Menu, Badge/Chip/Segmented/Switch, Empty/Error/Skeleton, Toast, ThemeToggle). Reuse these before creating new primitives. `/design` renders all of them. Update it when adding or changing a primitive.
 - `src/lib/theme/`: `config.ts` (server-safe constants + pre-paint script) and `use-theme.ts` (client store). Theme = `data-theme` on `<html>`, persisted in `localStorage["vernant-theme"]`, default dark.
 - `src/components/<feature>/`: feature views. `safety/` holds the report and block dialogs.
@@ -49,11 +49,11 @@ Vitest was the plan but couldn't be installed offline; migrate these tests to it
 - **Authorization:** enforce it on the server **and** in RLS. UI checks are UX, not security. Every table has RLS enabled, and no table is readable by `anon`.
 - **Validation:** validate all untrusted input server-side with Zod: server actions, route handlers, RPC args. Enforce limits in DB constraints too.
 - **Trust-sensitive writes:** matches, conversation creation, verification, moderation actions, and account deletion go through server code or `SECURITY DEFINER` functions with `set search_path = ''`. Clients never write these directly.
-- **Private data:** never expose birth dates, email addresses, precise location, IP addresses, or report contents to other users. Expose derived age and approximate distance only. Never log private user data.
+- **Private data:** never expose birth dates, email addresses, phone numbers, precise location, IP addresses, or report contents to other users. Expose derived age and approximate distance only. Never log private user data.
 - **Media:** keep it in private buckets and serve it through short-lived signed URLs. Before an upload is referenced: validate MIME and size, strip EXIF/GPS, and run the moderation scan.
 
 ## Trust & safety requirements
-- **18+ only:** check age at sign-up (client + DB trigger) and treat every user as an adult. Plan for verification and for handling reports that someone appears to be under 18.
+- **Adults:** members are expected to be adults, but sign-up has no age gate (product decision). A birth date entered later must be 18+ (DB trigger). Plan for verification and for handling reports that someone appears to be under 18.
 - **Blocking:** symmetric, enforced in SQL (`is_blocked()`), and applied to profiles, posts, stories, likes, messages, and media.
 - **Reporting:** available from every profile, post, and conversation. Reports are write-only for members, and moderators read them via the service role.
 - **Privacy:** respect profile visibility (everyone, members, matches), messaging permissions, show distance and online status, incognito, and private album grants (revocable).

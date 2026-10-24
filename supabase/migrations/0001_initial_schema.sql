@@ -25,7 +25,7 @@ create type public.album_grant_status as enum ('requested', 'approved', 'revoked
 create table public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   username citext not null unique check (username ~ '^[a-z0-9._]{3,30}$'),
-  display_name text not null check (char_length(display_name) between 1 and 40),
+  display_name text check (char_length(display_name) between 1 and 40),  -- optional; UI falls back to username
   pronouns text check (char_length(pronouns) <= 30),
   bio text not null default '' check (char_length(bio) <= 300),
   city text check (char_length(city) <= 60),
@@ -48,13 +48,14 @@ create table public.profiles (
 -- Private per-user data. Owner-only.
 create table public.profile_private (
   user_id uuid primary key references public.profiles (id) on delete cascade,
-  birth_date date not null,
+  birth_date date,                                  -- optional: sign-up doesn't ask for it
   incognito boolean not null default false,
   blur_incoming_media boolean not null default true,
   private_album_access text not null default 'approved' check (private_album_access in ('approved', 'matches'))
 );
 
--- 18+ enforcement at the database layer (client checks are UX only).
+-- Members are expected to be adults. Sign-up has no age gate, but a birth date entered
+-- later must still be 18+.
 create function public.enforce_adult() returns trigger
 language plpgsql as $$
 begin
@@ -67,6 +68,33 @@ end $$;
 create trigger profile_private_adult
   before insert or update of birth_date on public.profile_private
   for each row execute function public.enforce_adult();
+
+-- Every account gets its profile row at sign-up, so usernames are unique from the start.
+-- user_metadata is client-writable through the Auth API: the profiles checks re-validate it,
+-- and a missing or taken username makes the sign-up fail.
+create function public.handle_new_user() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  insert into public.profiles (id, username)
+  values (new.id, lower(trim(new.raw_user_meta_data ->> 'username')));
+  return new;
+end $$;
+
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+-- Username → account email for password log-in. Service role only: the sign-in server action
+-- resolves the email and hands it straight to Auth, so emails never reach clients.
+create index profiles_username_lower on public.profiles (lower(username::text));
+
+create function public.login_email(p_username text) returns text
+language sql stable security definer set search_path = '' as $$
+  select u.email from public.profiles p join auth.users u on u.id = p.id
+  where lower(p.username::text) = lower(p_username);
+$$;
+revoke execute on function public.login_email(text) from public, anon, authenticated;
+grant execute on function public.login_email(text) to service_role;
 
 -- -----------------------------------------------------------------------------
 -- Social graph

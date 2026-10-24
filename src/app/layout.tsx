@@ -20,7 +20,7 @@ const instrument = Instrument_Serif({
 export const metadata: Metadata = {
   title: { default: "Vernant", template: "%s · Vernant" },
   description:
-    "An 18+ community for bears, chubs, and the people who admire them. Dating, friendship, and community.",
+    "An adult community for bears, chubs, and the people who admire them. Dating, friendship, and community.",
   robots: { index: false, follow: false },
 };
 

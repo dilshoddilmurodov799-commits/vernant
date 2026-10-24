@@ -12,7 +12,7 @@ const PILLARS = [
 ];
 
 const SAFETY = [
-  { icon: ShieldCheck, title: "Strictly 18+", body: "Age confirmation at sign-up and photo verification for a trusted badge." },
+  { icon: ShieldCheck, title: "Trusted members", body: "Photo verification for a trusted badge, and reporting on every profile, post, and chat." },
   { icon: Lock, title: "Private albums", body: "Share private photos only with people you approve, and revoke access any time." },
   { icon: Eye, title: "Privacy controls", body: "Choose who sees your profile, hide your distance, or browse incognito." },
 ];
@@ -51,10 +51,10 @@ export default function LandingPage() {
                 Create your profile <ArrowRight />
               </ButtonLink>
               <ButtonLink href="/feed" variant="outline" size="lg">
-                Explore the demo
+                Check out others
               </ButtonLink>
             </div>
-            <p className="mt-6 text-xs text-subtle">18+ only · Free to join</p>
+            <p className="mt-6 text-xs text-subtle">For adults · Free to join</p>
           </div>
 
           <div className="relative grid h-[460px] grid-cols-6 grid-rows-6 gap-3 md:h-[560px]" aria-hidden>
@@ -115,7 +115,7 @@ export default function LandingPage() {
 
       <footer className="border-t border-line">
         <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-4 px-5 py-8 text-xs text-subtle md:flex-row md:items-center">
-          <p>© 2026 Vernant · Adults 18+ only</p>
+          <p>© 2026 Vernant · For adults</p>
           <DemoNotice />
         </div>
       </footer>

@@ -10,11 +10,13 @@ import { Avatar } from "@/components/ui/avatar";
 import { ButtonLink } from "@/components/ui/button";
 import { Card, VerifiedBadge } from "@/components/ui/primitives";
 import { EmptyState } from "@/components/ui/states";
+import { useMemberAction } from "@/components/auth/member-gate";
 import { StoryBar, StoryBarSkeleton } from "./story-bar";
 import { PostCard, PostCardSkeleton } from "./post-card";
 
 export function FeedView() {
   const { state, dispatch, visibleUsers } = useDemo();
+  const member = useMemberAction();
   const ready = useSimulatedLoad("feed");
   const [hidden, setHidden] = useState<Record<string, boolean>>({});
 
@@ -65,7 +67,7 @@ export function FeedView() {
                     <span className="block truncate text-xs text-subtle">{u.identities.join(" · ")}</span>
                   </span>
                 </Link>
-                <button onClick={() => dispatch({ type: "toggleFollow", userId: u.id })} className="text-xs font-medium text-accent hover:text-accent-hover">
+                <button onClick={() => member(() => dispatch({ type: "toggleFollow", userId: u.id }))} className="text-xs font-medium text-accent hover:text-accent-hover">
                   Follow
                 </button>
               </div>

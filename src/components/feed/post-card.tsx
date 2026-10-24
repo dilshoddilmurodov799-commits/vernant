@@ -11,12 +11,14 @@ import { Menu } from "@/components/ui/menu";
 import { VerifiedBadge } from "@/components/ui/primitives";
 import { Skeleton } from "@/components/ui/states";
 import { useToast } from "@/components/ui/toast";
+import { useMemberAction } from "@/components/auth/member-gate";
 import { SafetyDialogs, type SafetyAction } from "@/components/safety/safety-dialogs";
 import type { Post } from "@/lib/types";
 
 export function PostCard({ post, onHide, priority }: { post: Post; onHide?: (id: string) => void; priority?: boolean }) {
   const { state, dispatch, getUser } = useDemo();
   const toast = useToast();
+  const member = useMemberAction();
   const author = getUser(post.authorId);
   const [index, setIndex] = useState(0);
   const [burst, setBurst] = useState(0);
@@ -32,11 +34,12 @@ export function PostCard({ post, onHide, priority }: { post: Post; onHide?: (id:
   const following = !!state.following[author.id];
   const visibleComments = showComments ? post.comments : post.comments.slice(-1);
 
-  const like = () => dispatch({ type: "togglePostLike", postId: post.id });
-  const doubleTapLike = () => {
-    if (!liked) like();
-    setBurst((b) => b + 1);
-  };
+  const like = () => member(() => dispatch({ type: "togglePostLike", postId: post.id }));
+  const doubleTapLike = () =>
+    member(() => {
+      if (!liked) like();
+      setBurst((b) => b + 1);
+    });
 
   return (
     <article className="overflow-hidden rounded-2xl border border-line bg-surface animate-rise">
@@ -62,10 +65,12 @@ export function PostCard({ post, onHide, priority }: { post: Post; onHide?: (id:
           <button
             type="button"
             aria-pressed={following}
-            onClick={() => {
-              dispatch({ type: "toggleFollow", userId: author.id });
-              toast(following ? `Unfollowed ${author.name.split(" ")[0]}` : `Following ${author.name.split(" ")[0]}`);
-            }}
+            onClick={() =>
+              member(() => {
+                dispatch({ type: "toggleFollow", userId: author.id });
+                toast(following ? `Unfollowed ${author.name.split(" ")[0]}` : `Following ${author.name.split(" ")[0]}`);
+              })
+            }
             className={cn(
               "h-8 shrink-0 rounded-lg px-3 text-xs font-medium transition-colors",
               following ? "text-muted hover:bg-surface-2 hover:text-fg" : "bg-surface-3 text-fg hover:bg-surface-4",
@@ -88,8 +93,8 @@ export function PostCard({ post, onHide, priority }: { post: Post; onHide?: (id:
               ? []
               : [
                   { label: "Hide post", icon: EyeOff, onSelect: () => onHide?.(post.id) },
-                  { label: "Report", icon: Flag, onSelect: () => setSafety("report"), danger: true },
-                  { label: `Block ${author.name.split(" ")[0]}`, icon: ShieldOff, onSelect: () => setSafety("block"), danger: true },
+                  { label: "Report", icon: Flag, onSelect: () => member(() => setSafety("report")), danger: true },
+                  { label: `Block ${author.name.split(" ")[0]}`, icon: ShieldOff, onSelect: () => member(() => setSafety("block")), danger: true },
                 ]),
           ]}
         />
@@ -154,10 +159,12 @@ export function PostCard({ post, onHide, priority }: { post: Post; onHide?: (id:
           </ActionButton>
           <ActionButton
             label={saved ? "Remove from saved" : "Save"}
-            onClick={() => {
-              dispatch({ type: "togglePostSave", postId: post.id });
-              toast(saved ? "Removed from saved" : "Saved to your collection");
-            }}
+            onClick={() =>
+              member(() => {
+                dispatch({ type: "togglePostSave", postId: post.id });
+                toast(saved ? "Removed from saved" : "Saved to your collection");
+              })
+            }
             className="ml-auto"
           >
             <Bookmark className={cn("size-[22px]", saved && "fill-fg")} />
@@ -198,8 +205,10 @@ export function PostCard({ post, onHide, priority }: { post: Post; onHide?: (id:
             onSubmit={(e) => {
               e.preventDefault();
               if (!comment.trim()) return;
-              dispatch({ type: "addComment", postId: post.id, text: comment.trim() });
-              setComment("");
+              member(() => {
+                dispatch({ type: "addComment", postId: post.id, text: comment.trim() });
+                setComment("");
+              });
             }}
             className="mt-3 flex items-center gap-2 border-t border-line pt-3"
           >
